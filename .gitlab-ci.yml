@@ -1,0 +1,46 @@
+.caching_rust: &caching_rust
+    cache:
+      paths:
+        - .cargo/
+        - .cache/sccache
+        - target/x86_64-unknown-linux-musl/release/material
+
+stages:
+    - build_binary
+    - build_docker
+
+
+prepare_deps_for_cargo:
+   stage: build_binary
+   image: hatembt/rust-ci:latest
+   <<: *caching_rust
+   before_script:
+       - export CARGO_HOME="${PWD}/.cargo"
+       - echo $CARGO_HOME
+       - export SCCACHE_DIR="${PWD}/.cache/sccache"
+       - echo $SCCACHE_DIR
+       - export PATH="/builds/Astrolab-devops/material/.cargo/bin:$PATH"
+       - export RUSTC_WRAPPER="$CARGO_HOME/bin/sccache"
+       - echo $RUSTC_WRAPPER
+
+   script:
+       -  cargo build --release --target=x86_64-unknown-linux-musl --features vendored
+   cache:
+     paths:
+       - .cargo/
+       - .cache/sccache
+   artifacts:
+     paths:
+       - target/x86_64-unknown-linux-musl/release/material
+
+
+build_docker_image:
+   stage: build_docker
+   image: docker:latest
+   << : *caching_rust
+   services:
+     - docker:dind
+   script:
+     - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN registry.gitlab.com
+     - docker build -t registry.gitlab.com/astrolab-devops/material:0.2.1 .  
+     - docker push registry.gitlab.com/astrolab-devops/material:0.2.1
